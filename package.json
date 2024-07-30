@@ -1,0 +1,30 @@
+{
+  "name": "@humbhionline/bap",
+  "version": "1.0.0",
+  "description": "Humbhionline Buyer application",
+  "main": "vite.config.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "vite build --mode development"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IntentBrowser/browser-core.git"
+  },
+  "keywords": [],
+  "author": "venky",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/IntentBrowser/browser-core/issues"
+  },
+  "homepage": "https://github.com/IntentBrowser/browser-core#readme",
+  "dependencies": {
+    "axios": "^1.7.2",
+    "lockr": "^0.9.0-beta.2",
+    "vite": "^5.3.2"
+  }
+}
