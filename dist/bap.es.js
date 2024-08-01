@@ -2681,7 +2681,7 @@ function transactions(network2) {
               transaction_id: crypto.randomUUID(),
               message_id: crypto.randomUUID(),
               action: "search",
-              ttl: "PT60S"
+              ttl: "PT10S"
             },
             message: {
               intent: {}
@@ -2789,6 +2789,7 @@ function transactions(network2) {
           }
           if (evtSource) {
             evtSource.close();
+            evtSource = void 0;
           }
           evtSource = new EventSource(
             `${network2.search_provider().get().subscriber_url}/read_events/${message_id}`
@@ -2797,6 +2798,7 @@ function transactions(network2) {
             let response = JSON.parse(event.data);
             if (!response || response.done) {
               evtSource.close();
+              evtSource = void 0;
               on_event(void 0);
             } else if (response.message) {
               let action = response.context.action.substring(3);

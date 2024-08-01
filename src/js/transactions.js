@@ -37,7 +37,7 @@ function transactions(network) {
                             transaction_id: crypto.randomUUID(),
                             message_id: crypto.randomUUID(),
                             action: "search",
-                            ttl: "PT60S",
+                            ttl: "PT10S",
                         },
                         message: {
                             intent: {},
@@ -154,6 +154,7 @@ function transactions(network) {
                     }
                     if (evtSource) {
                         evtSource.close();
+                        evtSource = undefined;
                     }
                     evtSource = new EventSource(
                         `${network.search_provider().get().subscriber_url
@@ -163,6 +164,7 @@ function transactions(network) {
                         let response = JSON.parse(event.data);
                         if (!response || response.done) {
                             evtSource.close();
+                            evtSource = undefined;
                             on_event(undefined);
                         } else if (response.message) {
                             let action = response.context.action.substring(3); // strip the on_...
