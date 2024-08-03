@@ -2875,14 +2875,14 @@
       registry_id: "id.humbhionline.in",
       base_url: "https://id.humbhionline.in",
       registry_url: "https://id.humbhionline.in/subscribers"
-    },
-    beckn_open: {
-      name: "beckn_open",
-      registry_id: "registry.becknprotocol.io..LREG",
-      base_url: "https://registry.becknprotocol.io",
-      registry_url: "https://registry.becknprotocol.io/subscribers",
-      version: "1.0"
     }
+    /* beckn_open: {
+        name: "beckn_open",
+        registry_id: "registry.becknprotocol.io..LREG",
+        base_url: "https://registry.becknprotocol.io",
+        registry_url: "https://registry.becknprotocol.io/subscribers",
+        version: "1.0",
+    },*/
   };
   const domain_category_descriptor = {
     BUY_TRANSPORT_VEHICLE: {
@@ -2955,6 +2955,8 @@
       choose(name) {
         current || (current = {});
         current.network = networks[name];
+        this._search_provider = void 0;
+        this._transactions = void 0;
         this.ensure();
         this.persist();
         return this;
@@ -2989,10 +2991,13 @@
         } else {
           return api().url(`${this.base_url()}/network_domains`).headers({ ApiKeyCase: "SNAKE", ApiRootRequired: "N" }).get().then(function(response) {
             current.network.domains = response;
-            console.log("Response found " + JSON.stringify(response));
+            if (current.network.domains.length == 1) {
+              current.network.domain = current.network.domains[0];
+            }
             return current.network.domains;
           }).catch((err) => {
             current.network.domains = [];
+            current.network.domain = void 0;
             return current.network.domains;
           }).finally(() => {
             self2.persist();

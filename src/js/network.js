@@ -11,13 +11,13 @@ const networks = {
         base_url: "https://id.humbhionline.in",
         registry_url: "https://id.humbhionline.in/subscribers",
     },
-    beckn_open: {
+    /* beckn_open: {
         name: "beckn_open",
         registry_id: "registry.becknprotocol.io..LREG",
         base_url: "https://registry.becknprotocol.io",
         registry_url: "https://registry.becknprotocol.io/subscribers",
         version: "1.0",
-    },
+    },*/
 };
 const domain_category_descriptor = {
     BUY_TRANSPORT_VEHICLE: {
@@ -97,6 +97,8 @@ function network() {
         choose(name) {
             current ||= {};
             current.network = networks[name];
+            this._search_provider = undefined;
+            this._transactions = undefined;
             this.ensure();
             this.persist();
             return this;
@@ -134,11 +136,14 @@ function network() {
                     .get()
                     .then(function (response) {
                         current.network.domains = response;
-                        console.log("Response found " + JSON.stringify(response));
+                        if (current.network.domains.length == 1) {
+                            current.network.domain = current.network.domains[0];
+                        }
                         return current.network.domains;
                     })
                     .catch((err) => {
                         current.network.domains = [];
+                        current.network.domain = undefined;
                         return current.network.domains;
                     })
                     .finally(() => {
