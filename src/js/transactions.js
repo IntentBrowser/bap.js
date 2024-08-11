@@ -1,34 +1,41 @@
 import { api } from "./api.js";
-function transactions(network) {
+import { db } from "./orders.js";
+async function transactions(network) {
     network.ensure();
     let n = network.get();
-    n.transactions = n.transactions || [];
-    n.carts = n.carts || [];
-    network.persist();
 
     let transactions = {}; // Both complete and incomplete transactions.
-    n.transactions.forEach((element) => {
-        transactions[element["search"].request.context.transaction_id] =
-            element;
+    let cartsDb = (await db()).carts;
+    let ordersDb = (await db()).orders;
+
+    let carts = [];
+    let orders = [];
+    (await cartsDb.keys()).forEach(async (txnId) => {
+        let cart = await cartsDb.get(txnId);
+        transactions[txnId] = cart;
+        carts.push(cart);
     });
-    n.carts.forEach((element) => {
-        transactions[element["search"].request.context.transaction_id] =
-            element;
-    })
+    (await ordersDb.keys()).forEach(async (txnId) => {
+        let order = await ordersDb.get(txnId);
+        orders.push(order);
+        transactions[txnId] = order;
+    });
+
     let evtSource = undefined;
     return {
-        close_cart: function (transaction_id) {
+        close_cart: async function (transaction_id) {
             let cart = transactions[transaction_id];
             if (cart) {
-                let index = n.carts.findIndex((c) => c.search.request.context.transaction_id == transaction_id);
                 if (this.transaction(transaction_id).isPlaced()) {
-                    n.transactions.splice(0, 0, cart); // Add lastest in the first.
+                    await ordersDb.set(transaction_id, JSON.parse(JSON.stringify(cart)));
+                    orders.push(cart);
                 }
-                n.carts.splice(index, 1);
-                network.persist();
+                await cartsDb.rm(transaction_id);
+                let index = carts.findIndex((c) => c.search.request.context.transaction_id == transaction_id);
+                carts.splice(index, 1);
             }
         },
-        new_cart: function () {
+        new_cart: async function () {
             let cart = {
                 search: {
                     request: {
@@ -72,22 +79,22 @@ function transactions(network) {
                     depends: ["confirm"],
                 },
             };
-            n.carts.splice(0, 0, cart); //add first.
+            await cartsDb.set(cart.search.request.context.transaction_id, cart);
             transactions[cart.search.request.context.transaction_id] = cart;
-            network.persist();
+            carts.push(cart);
             return cart;
         },
-        carts: function (reset = false) {
+        carts: async function (reset = false) {
             if (reset) {
-                n.carts.forEach((cart) => {
-                    this.close_cart(cart.search.request.context.transaction_id);
-                });
-                n.carts = [];
+                for (let cart of carts) {
+                    await this.close_cart(cart.search.request.context.transaction_id);
+                };
+                carts = [];
             }
-            return n.carts;
+            return carts;
         },
         list: function () {
-            return n.transactions;
+            return transactions;
         },
         transaction: function (transaction_id) {
             let txn = transaction_id ? transactions[transaction_id] : undefined;
@@ -160,7 +167,7 @@ function transactions(network) {
                         `${network.search_provider().get().subscriber_url
                         }/read_events/${message_id}`
                     );
-                    evtSource.onmessage = (event) => {
+                    evtSource.onmessage = async (event) => {
                         let response = JSON.parse(event.data);
                         if (!response || response.done) {
                             evtSource.close();
@@ -168,12 +175,12 @@ function transactions(network) {
                             on_event(undefined);
                         } else if (response.message) {
                             let action = response.context.action.substring(3); // strip the on_...
-                            this.propagate_to_dependent_actions(action, response);
+                            await this.propagate_to_dependent_actions(action, response);
                             on_event(response);
                         }
                     };
                 },
-                propagate_to_dependent_actions(action, response) {
+                async propagate_to_dependent_actions(action, response) {
                     let self = this;
                     let action_payload = self.payload(action);
                     if (action == "search") {
@@ -197,15 +204,22 @@ function transactions(network) {
                                 next_request;
                         }
                     );
-                    network.persist();
+                    await this.update();
                 },
-                call: function (action, sync = false) {
+                update: async function () {
+                    if (this.isPlaced()) {
+                        await ordersDb.set(transaction_id, JSON.parse(JSON.stringify(txn)));
+                    } else {
+                        await cartsDb.set(transaction_id, JSON.parse(JSON.stringify(txn)));
+                    }
+                },
+                call: async function (action, sync = false) {
                     let self = this;
                     let action_payload = self.payload(action);
                     action_payload.request.context.message_id =
                         crypto.randomUUID();
                     if (action == "search" || action_payload.request.context.bpp_url) {
-                        return api()
+                        let response = await api()
                             .url(
                                 `${network.search_provider().get().subscriber_url
                                 }/${action}`
@@ -214,26 +228,22 @@ function transactions(network) {
                             .headers({
                                 "X-CallBackToBeSynchronized": sync ? "Y" : "N",
                             })
-                            .post()
-                            .then(function (response) {
-                                if (sync == 'Y') {
-                                    action_payload.response = response;
-                                    self.propagate_to_dependent_actions(action, response);
-                                }
-                                if (action == "confirm") {
-                                    network_transactions.close_cart(action_payload.request.context.transaction_id); // Reset Cart.
-                                }
-                                return response;
-                            });
+                            .post();
+                        if (sync == 'Y') {
+                            action_payload.response = response;
+                            await self.propagate_to_dependent_actions(action, response);
+                        }
+                        if (action == "confirm") {
+                            await network_transactions.close_cart(action_payload.request.context.transaction_id); // Reset Cart.
+                        }
+                        return response;
                     } else {
-                        return new Promise((resolve, reject) => {
-                            if (action == "confirm") {
-                                network_transactions.close_cart(action_payload.request.context.transaction_id); // Reset Cart.
-                            } else {
-                                reject(new Error("Only confirm api can be called for non application bpps."));
-                            }
-                            resolve(undefined);
-                        });
+                        if (action == "confirm") {
+                            await network_transactions.close_cart(action_payload.request.context.transaction_id); // Reset Cart.
+                        } else {
+                            throw new Error("Only confirm api can be called for non application bpps.");
+                        }
+                        return undefined;
                     }
                 },
             };

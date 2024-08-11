@@ -178,8 +178,8 @@ function network() {
             return (this._search_provider ||= search_engine(this));
         },
         _transactions: undefined,
-        transactions() {
-            return (this._transactions ||= transactions(this));
+        async transactions() {
+            return (this._transactions ||= await transactions(this));
         },
     };
 }

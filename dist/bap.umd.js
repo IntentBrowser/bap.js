@@ -3,7 +3,7 @@
 })(this, function() {
   "use strict";
   function bind(fn, thisArg) {
-    return function wrap() {
+    return function wrap2() {
       return fn.apply(thisArg, arguments);
     };
   }
@@ -2190,7 +2190,7 @@
     }
   }
   function spread(callback) {
-    return function wrap(arr) {
+    return function wrap2(arr) {
       return callback.apply(null, arr);
     };
   }
@@ -2650,33 +2650,314 @@
       }
     };
   }
-  function transactions(network2) {
+  const instanceOfAny = (object, constructors) => constructors.some((c) => object instanceof c);
+  let idbProxyableTypes;
+  let cursorAdvanceMethods;
+  function getIdbProxyableTypes() {
+    return idbProxyableTypes || (idbProxyableTypes = [
+      IDBDatabase,
+      IDBObjectStore,
+      IDBIndex,
+      IDBCursor,
+      IDBTransaction
+    ]);
+  }
+  function getCursorAdvanceMethods() {
+    return cursorAdvanceMethods || (cursorAdvanceMethods = [
+      IDBCursor.prototype.advance,
+      IDBCursor.prototype.continue,
+      IDBCursor.prototype.continuePrimaryKey
+    ]);
+  }
+  const transactionDoneMap = /* @__PURE__ */ new WeakMap();
+  const transformCache = /* @__PURE__ */ new WeakMap();
+  const reverseTransformCache = /* @__PURE__ */ new WeakMap();
+  function promisifyRequest(request) {
+    const promise = new Promise((resolve, reject) => {
+      const unlisten = () => {
+        request.removeEventListener("success", success);
+        request.removeEventListener("error", error);
+      };
+      const success = () => {
+        resolve(wrap(request.result));
+        unlisten();
+      };
+      const error = () => {
+        reject(request.error);
+        unlisten();
+      };
+      request.addEventListener("success", success);
+      request.addEventListener("error", error);
+    });
+    reverseTransformCache.set(promise, request);
+    return promise;
+  }
+  function cacheDonePromiseForTransaction(tx) {
+    if (transactionDoneMap.has(tx))
+      return;
+    const done = new Promise((resolve, reject) => {
+      const unlisten = () => {
+        tx.removeEventListener("complete", complete);
+        tx.removeEventListener("error", error);
+        tx.removeEventListener("abort", error);
+      };
+      const complete = () => {
+        resolve();
+        unlisten();
+      };
+      const error = () => {
+        reject(tx.error || new DOMException("AbortError", "AbortError"));
+        unlisten();
+      };
+      tx.addEventListener("complete", complete);
+      tx.addEventListener("error", error);
+      tx.addEventListener("abort", error);
+    });
+    transactionDoneMap.set(tx, done);
+  }
+  let idbProxyTraps = {
+    get(target, prop, receiver) {
+      if (target instanceof IDBTransaction) {
+        if (prop === "done")
+          return transactionDoneMap.get(target);
+        if (prop === "store") {
+          return receiver.objectStoreNames[1] ? void 0 : receiver.objectStore(receiver.objectStoreNames[0]);
+        }
+      }
+      return wrap(target[prop]);
+    },
+    set(target, prop, value) {
+      target[prop] = value;
+      return true;
+    },
+    has(target, prop) {
+      if (target instanceof IDBTransaction && (prop === "done" || prop === "store")) {
+        return true;
+      }
+      return prop in target;
+    }
+  };
+  function replaceTraps(callback) {
+    idbProxyTraps = callback(idbProxyTraps);
+  }
+  function wrapFunction(func) {
+    if (getCursorAdvanceMethods().includes(func)) {
+      return function(...args) {
+        func.apply(unwrap(this), args);
+        return wrap(this.request);
+      };
+    }
+    return function(...args) {
+      return wrap(func.apply(unwrap(this), args));
+    };
+  }
+  function transformCachableValue(value) {
+    if (typeof value === "function")
+      return wrapFunction(value);
+    if (value instanceof IDBTransaction)
+      cacheDonePromiseForTransaction(value);
+    if (instanceOfAny(value, getIdbProxyableTypes()))
+      return new Proxy(value, idbProxyTraps);
+    return value;
+  }
+  function wrap(value) {
+    if (value instanceof IDBRequest)
+      return promisifyRequest(value);
+    if (transformCache.has(value))
+      return transformCache.get(value);
+    const newValue = transformCachableValue(value);
+    if (newValue !== value) {
+      transformCache.set(value, newValue);
+      reverseTransformCache.set(newValue, value);
+    }
+    return newValue;
+  }
+  const unwrap = (value) => reverseTransformCache.get(value);
+  function openDB(name, version, { blocked, upgrade, blocking, terminated } = {}) {
+    const request = indexedDB.open(name, version);
+    const openPromise = wrap(request);
+    if (upgrade) {
+      request.addEventListener("upgradeneeded", (event) => {
+        upgrade(wrap(request.result), event.oldVersion, event.newVersion, wrap(request.transaction), event);
+      });
+    }
+    if (blocked) {
+      request.addEventListener("blocked", (event) => blocked(
+        // Casting due to https://github.com/microsoft/TypeScript-DOM-lib-generator/pull/1405
+        event.oldVersion,
+        event.newVersion,
+        event
+      ));
+    }
+    openPromise.then((db2) => {
+      if (terminated)
+        db2.addEventListener("close", () => terminated());
+      if (blocking) {
+        db2.addEventListener("versionchange", (event) => blocking(event.oldVersion, event.newVersion, event));
+      }
+    }).catch(() => {
+    });
+    return openPromise;
+  }
+  const readMethods = ["get", "getKey", "getAll", "getAllKeys", "count"];
+  const writeMethods = ["put", "add", "delete", "clear"];
+  const cachedMethods = /* @__PURE__ */ new Map();
+  function getMethod(target, prop) {
+    if (!(target instanceof IDBDatabase && !(prop in target) && typeof prop === "string")) {
+      return;
+    }
+    if (cachedMethods.get(prop))
+      return cachedMethods.get(prop);
+    const targetFuncName = prop.replace(/FromIndex$/, "");
+    const useIndex = prop !== targetFuncName;
+    const isWrite = writeMethods.includes(targetFuncName);
+    if (
+      // Bail if the target doesn't exist on the target. Eg, getAll isn't in Edge.
+      !(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype) || !(isWrite || readMethods.includes(targetFuncName))
+    ) {
+      return;
+    }
+    const method = async function(storeName, ...args) {
+      const tx = this.transaction(storeName, isWrite ? "readwrite" : "readonly");
+      let target2 = tx.store;
+      if (useIndex)
+        target2 = target2.index(args.shift());
+      return (await Promise.all([
+        target2[targetFuncName](...args),
+        isWrite && tx.done
+      ]))[0];
+    };
+    cachedMethods.set(prop, method);
+    return method;
+  }
+  replaceTraps((oldTraps) => ({
+    ...oldTraps,
+    get: (target, prop, receiver) => getMethod(target, prop) || oldTraps.get(target, prop, receiver),
+    has: (target, prop) => !!getMethod(target, prop) || oldTraps.has(target, prop)
+  }));
+  const advanceMethodProps = ["continue", "continuePrimaryKey", "advance"];
+  const methodMap = {};
+  const advanceResults = /* @__PURE__ */ new WeakMap();
+  const ittrProxiedCursorToOriginalProxy = /* @__PURE__ */ new WeakMap();
+  const cursorIteratorTraps = {
+    get(target, prop) {
+      if (!advanceMethodProps.includes(prop))
+        return target[prop];
+      let cachedFunc = methodMap[prop];
+      if (!cachedFunc) {
+        cachedFunc = methodMap[prop] = function(...args) {
+          advanceResults.set(this, ittrProxiedCursorToOriginalProxy.get(this)[prop](...args));
+        };
+      }
+      return cachedFunc;
+    }
+  };
+  async function* iterate(...args) {
+    let cursor = this;
+    if (!(cursor instanceof IDBCursor)) {
+      cursor = await cursor.openCursor(...args);
+    }
+    if (!cursor)
+      return;
+    cursor = cursor;
+    const proxiedCursor = new Proxy(cursor, cursorIteratorTraps);
+    ittrProxiedCursorToOriginalProxy.set(proxiedCursor, cursor);
+    reverseTransformCache.set(proxiedCursor, unwrap(cursor));
+    while (cursor) {
+      yield proxiedCursor;
+      cursor = await (advanceResults.get(proxiedCursor) || cursor.continue());
+      advanceResults.delete(proxiedCursor);
+    }
+  }
+  function isIteratorProp(target, prop) {
+    return prop === Symbol.asyncIterator && instanceOfAny(target, [IDBIndex, IDBObjectStore, IDBCursor]) || prop === "iterate" && instanceOfAny(target, [IDBIndex, IDBObjectStore]);
+  }
+  replaceTraps((oldTraps) => ({
+    ...oldTraps,
+    get(target, prop, receiver) {
+      if (isIteratorProp(target, prop))
+        return iterate;
+      return oldTraps.get(target, prop, receiver);
+    },
+    has(target, prop) {
+      return isIteratorProp(target, prop) || oldTraps.has(target, prop);
+    }
+  }));
+  const dbPromise = openDB("transactions", 1, {
+    upgrade(db2) {
+      db2.createObjectStore("orders");
+      db2.createObjectStore("carts");
+    }
+  });
+  async function db() {
+    const db2 = await dbPromise;
+    return {
+      orders: {
+        get: async function(key) {
+          return await db2.get("orders", key);
+        },
+        set: async function(key, val) {
+          return await db2.put("orders", val, key);
+        },
+        rm: async function(key) {
+          return await db2.delete("orders", key);
+        },
+        keys: async function() {
+          return await db2.getAllKeys("orders");
+        },
+        clear: async function() {
+          return await db2.clear("orders");
+        }
+      },
+      carts: {
+        get: async function(key) {
+          return await db2.get("carts", key);
+        },
+        set: async function(key, val) {
+          return await db2.put("carts", val, key);
+        },
+        rm: async function(key) {
+          return await db2.delete("carts", key);
+        },
+        keys: async function() {
+          return await db2.getAllKeys("carts");
+        },
+        clear: async function() {
+          return await db2.clear("carts");
+        }
+      }
+    };
+  }
+  async function transactions(network2) {
     network2.ensure();
     let n = network2.get();
-    n.transactions = n.transactions || [];
-    n.carts = n.carts || [];
-    network2.persist();
     let transactions2 = {};
-    n.transactions.forEach((element) => {
-      transactions2[element["search"].request.context.transaction_id] = element;
+    let cartsDb = (await db()).carts;
+    let ordersDb = (await db()).orders;
+    let carts = [];
+    (await cartsDb.keys()).forEach(async (txnId) => {
+      let cart = await cartsDb.get(txnId);
+      transactions2[txnId] = cart;
+      carts.push(cart);
     });
-    n.carts.forEach((element) => {
-      transactions2[element["search"].request.context.transaction_id] = element;
+    (await ordersDb.keys()).forEach(async (txnId) => {
+      let order = await ordersDb.get(txnId);
+      transactions2[txnId] = order;
     });
     let evtSource = void 0;
     return {
-      close_cart: function(transaction_id) {
+      close_cart: async function(transaction_id) {
         let cart = transactions2[transaction_id];
         if (cart) {
-          let index = n.carts.findIndex((c) => c.search.request.context.transaction_id == transaction_id);
           if (this.transaction(transaction_id).isPlaced()) {
-            n.transactions.splice(0, 0, cart);
+            await ordersDb.set(transaction_id, JSON.parse(JSON.stringify(cart)));
           }
-          n.carts.splice(index, 1);
-          network2.persist();
+          await cartsDb.rm(transaction_id);
+          let index = carts.findIndex((c) => c.search.request.context.transaction_id == transaction_id);
+          carts.splice(index, 1);
         }
       },
-      new_cart: function() {
+      new_cart: async function() {
         let cart = {
           search: {
             request: {
@@ -2720,22 +3001,22 @@
             depends: ["confirm"]
           }
         };
-        n.carts.splice(0, 0, cart);
+        await cartsDb.set(cart.search.request.context.transaction_id, cart);
         transactions2[cart.search.request.context.transaction_id] = cart;
-        network2.persist();
+        carts.push(cart);
         return cart;
       },
-      carts: function(reset = false) {
+      carts: async function(reset = false) {
         if (reset) {
-          n.carts.forEach((cart) => {
-            this.close_cart(cart.search.request.context.transaction_id);
-          });
-          n.carts = [];
+          for (let cart of carts) {
+            await this.close_cart(cart.search.request.context.transaction_id);
+          }
+          carts = [];
         }
-        return n.carts;
+        return carts;
       },
       list: function() {
-        return n.transactions;
+        return transactions2;
       },
       transaction: function(transaction_id) {
         let txn = transaction_id ? transactions2[transaction_id] : void 0;
@@ -2798,7 +3079,7 @@
             evtSource = new EventSource(
               `${network2.search_provider().get().subscriber_url}/read_events/${message_id}`
             );
-            evtSource.onmessage = (event) => {
+            evtSource.onmessage = async (event) => {
               let response = JSON.parse(event.data);
               if (!response || response.done) {
                 evtSource.close();
@@ -2806,12 +3087,12 @@
                 on_event(void 0);
               } else if (response.message) {
                 let action = response.context.action.substring(3);
-                this.propagate_to_dependent_actions(action, response);
+                await this.propagate_to_dependent_actions(action, response);
                 on_event(response);
               }
             };
           },
-          propagate_to_dependent_actions(action, response) {
+          async propagate_to_dependent_actions(action, response) {
             let self2 = this;
             let action_payload = self2.payload(action);
             if (action == "search") {
@@ -2832,36 +3113,40 @@
                 self2.payload(dependent_action).request = next_request;
               }
             );
-            network2.persist();
+            await this.update();
           },
-          call: function(action, sync = false) {
+          update: async function() {
+            if (this.isPlaced()) {
+              await ordersDb.set(transaction_id, JSON.parse(JSON.stringify(txn)));
+            } else {
+              await cartsDb.set(transaction_id, JSON.parse(JSON.stringify(txn)));
+            }
+          },
+          call: async function(action, sync = false) {
             let self2 = this;
             let action_payload = self2.payload(action);
             action_payload.request.context.message_id = crypto.randomUUID();
             if (action == "search" || action_payload.request.context.bpp_url) {
-              return api().url(
+              let response = await api().url(
                 `${network2.search_provider().get().subscriber_url}/${action}`
               ).parameters(action_payload.request).headers({
                 "X-CallBackToBeSynchronized": sync ? "Y" : "N"
-              }).post().then(function(response) {
-                if (sync == "Y") {
-                  action_payload.response = response;
-                  self2.propagate_to_dependent_actions(action, response);
-                }
-                if (action == "confirm") {
-                  network_transactions.close_cart(action_payload.request.context.transaction_id);
-                }
-                return response;
-              });
+              }).post();
+              if (sync == "Y") {
+                action_payload.response = response;
+                await self2.propagate_to_dependent_actions(action, response);
+              }
+              if (action == "confirm") {
+                await network_transactions.close_cart(action_payload.request.context.transaction_id);
+              }
+              return response;
             } else {
-              return new Promise((resolve, reject) => {
-                if (action == "confirm") {
-                  network_transactions.close_cart(action_payload.request.context.transaction_id);
-                } else {
-                  reject(new Error("Only confirm api can be called for non application bpps."));
-                }
-                resolve(void 0);
-              });
+              if (action == "confirm") {
+                await network_transactions.close_cart(action_payload.request.context.transaction_id);
+              } else {
+                throw new Error("Only confirm api can be called for non application bpps.");
+              }
+              return void 0;
             }
           }
         };
@@ -3028,8 +3313,8 @@
         return this._search_provider || (this._search_provider = search_engine(this));
       },
       _transactions: void 0,
-      transactions() {
-        return this._transactions || (this._transactions = transactions(this));
+      async transactions() {
+        return this._transactions || (this._transactions = await transactions(this));
       }
     };
   }
