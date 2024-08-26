@@ -135,7 +135,7 @@ function loadLocation(enableHighAccuracy) {
             {
                 enableHighAccuracy: enableHighAccuracy,
                 timeout: 2000,
-                maximumAge: 5 * 60 * 1000,
+                maximumAge: 60 * 60 * 1000,
             }
         ); // five minutes.
     });
