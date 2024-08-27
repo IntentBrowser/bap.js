@@ -92,26 +92,53 @@ function api() {
         },
     };
 }
+function watchLocation(enableHighAccuracy, onSuccess) {
+    var id = null;
+    id = navigator.geolocation.watchPosition(function (pos) {
+        let location = {};
+        copyLocation(pos, location);
+        onSuccess(location);
+        if (id) {
+            navigator.geolocation.clearWatch(id);
+            id = null;
+        }
+    }, function (error) {
+        console.error(`ERROR(${error.code}) : ${error.message}`);
+    }, {
+        enableHighAccuracy: enableHighAccuracy,
+        timeout: 2000,
+        maximumAge: 60 * 60 * 1000,
+    });
+
+}
+function copyLocation(position, location) {
+    location.accuracy = position.coords.accuracy;
+    location.altitude = position.coords.altitude;
+    location.altitudeAccuracy = position.coords.altitudeAccuracy;
+    location.heading = position.coords.heading;
+    location.latitude = position.coords.latitude;
+    location.longitude = position.coords.longitude;
+    location.speed = position.coords.speed;
+    Lockr.set("Location", location);
+}
 
 function loadLocation(enableHighAccuracy) {
+    let _location = Lockr.get("Location");
+    if (_location && _location.latitude) {
+        _location.cached = true;
+        return new Promise(function (resolve, reject) {
+            resolve(_location);
+        });
+    }
+
     return new Promise(function (resolve, reject) {
         navigator.geolocation.getCurrentPosition(
             function (position) {
                 let location = {};
-                location.accuracy = position.coords.accuracy;
-                location.altitude = position.coords.altitude;
-                location.altitudeAccuracy = position.coords.altitudeAccuracy;
-                location.heading = position.coords.heading;
-                location.latitude = position.coords.latitude;
-                location.longitude = position.coords.longitude;
-                location.speed = position.coords.speed;
-                Lockr.set("Location", location);
+                copyLocation(position, location)
                 resolve(location);
             },
             function (error) {
-                if (!Lockr.get("Location")) {
-                    Lockr.set("Location", {});
-                }
                 switch (error.code) {
                     case error.PERMISSION_DENIED:
                         console.error(
@@ -137,8 +164,9 @@ function loadLocation(enableHighAccuracy) {
                 timeout: 2000,
                 maximumAge: 60 * 60 * 1000,
             }
-        ); // five minutes.
+        ); // 60 minutes.
     });
 }
 
-export { api, loadLocation };
+
+export { api, loadLocation, watchLocation };
