@@ -104,6 +104,7 @@ function watchLocation(enableHighAccuracy, onSuccess) {
         }
     }, function (error) {
         console.error(`ERROR(${error.code}) : ${error.message}`);
+        onSuccess(null, error);
     }, {
         enableHighAccuracy: enableHighAccuracy,
         timeout: 2000,
@@ -157,7 +158,7 @@ function loadLocation(enableHighAccuracy) {
                         console.error("An unknown error occurred.");
                         break;
                 }
-                resolve(null);
+                resolve(null, error);
             },
             {
                 enableHighAccuracy: enableHighAccuracy,

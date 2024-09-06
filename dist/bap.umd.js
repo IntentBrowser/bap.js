@@ -2550,6 +2550,7 @@
       }
     }, function(error) {
       console.error(`ERROR(${error.code}) : ${error.message}`);
+      onSuccess(null, error);
     }, {
       enableHighAccuracy,
       timeout: 2e3,
@@ -2600,7 +2601,7 @@
               console.error("An unknown error occurred.");
               break;
           }
-          resolve(null);
+          resolve(null, error);
         },
         {
           enableHighAccuracy,
