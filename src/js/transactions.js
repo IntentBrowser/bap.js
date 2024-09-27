@@ -10,16 +10,18 @@ async function transactions(network) {
 
     let carts = [];
     let orders = [];
-    (await cartsDb.keys()).forEach(async (txnId) => {
+    let cartDbKeys = (await cartsDb.keys());
+    for (const txnId of cartDbKeys) {
         let cart = await cartsDb.get(txnId);
         transactions[txnId] = cart;
         carts.push(cart);
-    });
-    (await ordersDb.keys()).forEach(async (txnId) => {
+    }
+    let orderDbKeys = (await ordersDb.keys());
+    for (const txnId of orderDbKeys) {
         let order = await ordersDb.get(txnId);
         orders.push(order);
         transactions[txnId] = order;
-    });
+    }
 
     let evtSource = undefined;
     return {

@@ -2961,15 +2961,17 @@
     let cartsDb = (await db()).carts;
     let ordersDb = (await db()).orders;
     let carts = [];
-    (await cartsDb.keys()).forEach(async (txnId) => {
+    let cartDbKeys = await cartsDb.keys();
+    for (const txnId of cartDbKeys) {
       let cart = await cartsDb.get(txnId);
       transactions2[txnId] = cart;
       carts.push(cart);
-    });
-    (await ordersDb.keys()).forEach(async (txnId) => {
+    }
+    let orderDbKeys = await ordersDb.keys();
+    for (const txnId of orderDbKeys) {
       let order = await ordersDb.get(txnId);
       transactions2[txnId] = order;
-    });
+    }
     let evtSource = void 0;
     return {
       close_cart: async function(transaction_id) {
