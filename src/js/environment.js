@@ -3,12 +3,12 @@ const environments = {
     production: {
         branch: "main",
         cdn_base:
-            "https://raw.githubusercontent.com/IntentBrowser/browser-core/",
+            "https://raw.githubusercontent.com/IntentBrowser/bizlocal/",
     },
     staging: {
         branch: "staging",
         cdn_base:
-            "https://raw.githubusercontent.com/IntentBrowser/browser-core/",
+            "https://raw.githubusercontent.com/IntentBrowser/bizlocal/",
     },
     dev: {
         branch: "",

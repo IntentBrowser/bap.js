@@ -99,6 +99,8 @@ function network() {
             current.network = networks[name];
             this._search_provider = undefined;
             this._transactions = undefined;
+            this.network_environment("production");
+
             this.ensure();
             this.persist();
             return this;
@@ -181,6 +183,18 @@ function network() {
         async transactions() {
             return (this._transactions ||= await transactions(this));
         },
+        _network_environments: ["production", "test"],
+        network_environments() {
+            return this._network_environments;
+        },
+        network_environment(env) {
+            if (this._network_environments.indexOf(env) >= 0) {
+                current.network.network_environment = env;
+            } else {
+                current.network.network_environment = undefined;
+            }
+            this.persist();
+        }
     };
 }
 
