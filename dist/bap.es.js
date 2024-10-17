@@ -300,6 +300,26 @@ const toJSONObject = (obj) => {
 };
 const isAsyncFn = kindOfTest("AsyncFunction");
 const isThenable = (thing) => thing && (isObject(thing) || isFunction(thing)) && isFunction(thing.then) && isFunction(thing.catch);
+const _setImmediate = ((setImmediateSupported, postMessageSupported) => {
+  if (setImmediateSupported) {
+    return setImmediate;
+  }
+  return postMessageSupported ? ((token, callbacks) => {
+    _global.addEventListener("message", ({ source, data }) => {
+      if (source === _global && data === token) {
+        callbacks.length && callbacks.shift()();
+      }
+    }, false);
+    return (cb) => {
+      callbacks.push(cb);
+      _global.postMessage(token, "*");
+    };
+  })(`axios@${Math.random()}`, []) : (cb) => setTimeout(cb);
+})(
+  typeof setImmediate === "function",
+  isFunction(_global.postMessage)
+);
+const asap = typeof queueMicrotask !== "undefined" ? queueMicrotask.bind(_global) : typeof process !== "undefined" && process.nextTick || _setImmediate;
 const utils$1 = {
   isArray,
   isArrayBuffer,
@@ -356,7 +376,9 @@ const utils$1 = {
   isSpecCompliantForm,
   toJSONObject,
   isAsyncFn,
-  isThenable
+  isThenable,
+  setImmediate: _setImmediate,
+  asap
 };
 function AxiosError(message, code, config, request, response) {
   Error.call(this);
@@ -370,7 +392,10 @@ function AxiosError(message, code, config, request, response) {
   code && (this.code = code);
   config && (this.config = config);
   request && (this.request = request);
-  response && (this.response = response);
+  if (response) {
+    this.response = response;
+    this.status = response.status ? response.status : null;
+  }
 }
 utils$1.inherits(AxiosError, Error, {
   toJSON: function toJSON() {
@@ -389,7 +414,7 @@ utils$1.inherits(AxiosError, Error, {
       // Axios
       config: utils$1.toJSONObject(this.config),
       code: this.code,
-      status: this.response && this.response.status ? this.response.status : null
+      status: this.status
     };
   }
 });
@@ -670,9 +695,8 @@ const platform$1 = {
   protocols: ["http", "https", "file", "blob", "url", "data"]
 };
 const hasBrowserEnv = typeof window !== "undefined" && typeof document !== "undefined";
-const hasStandardBrowserEnv = ((product) => {
-  return hasBrowserEnv && ["ReactNative", "NativeScript", "NS"].indexOf(product) < 0;
-})(typeof navigator !== "undefined" && navigator.product);
+const _navigator = typeof navigator === "object" && navigator || void 0;
+const hasStandardBrowserEnv = hasBrowserEnv && (!_navigator || ["ReactNative", "NativeScript", "NS"].indexOf(_navigator.product) < 0);
 const hasStandardBrowserWebWorkerEnv = (() => {
   return typeof WorkerGlobalScope !== "undefined" && // eslint-disable-next-line no-undef
   self instanceof WorkerGlobalScope && typeof self.importScripts === "function";
@@ -683,6 +707,7 @@ const utils = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.definePropert
   hasBrowserEnv,
   hasStandardBrowserEnv,
   hasStandardBrowserWebWorkerEnv,
+  navigator: _navigator,
   origin
 }, Symbol.toStringTag, { value: "Module" }));
 const platform = {
@@ -761,7 +786,7 @@ function stringifySafely(rawValue, parser, encoder) {
       }
     }
   }
-  return (encoder || JSON.stringify)(rawValue);
+  return (0, JSON.stringify)(rawValue);
 }
 const defaults = {
   transitional: transitionalDefaults,
@@ -1191,27 +1216,35 @@ function speedometer(samplesCount, min) {
 }
 function throttle(fn, freq) {
   let timestamp = 0;
-  const threshold = 1e3 / freq;
-  let timer = null;
-  return function throttled() {
-    const force = this === true;
-    const now = Date.now();
-    if (force || now - timestamp > threshold) {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      timestamp = now;
-      return fn.apply(null, arguments);
+  let threshold = 1e3 / freq;
+  let lastArgs;
+  let timer;
+  const invoke = (args, now = Date.now()) => {
+    timestamp = now;
+    lastArgs = null;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
     }
-    if (!timer) {
-      timer = setTimeout(() => {
-        timer = null;
-        timestamp = Date.now();
-        return fn.apply(null, arguments);
-      }, threshold - (now - timestamp));
+    fn.apply(null, args);
+  };
+  const throttled = (...args) => {
+    const now = Date.now();
+    const passed = now - timestamp;
+    if (passed >= threshold) {
+      invoke(args, now);
+    } else {
+      lastArgs = args;
+      if (!timer) {
+        timer = setTimeout(() => {
+          timer = null;
+          invoke(lastArgs);
+        }, threshold - passed);
+      }
     }
   };
+  const flush2 = () => lastArgs && invoke(lastArgs);
+  return [throttled, flush2];
 }
 const progressEventReducer = (listener, isDownloadStream, freq = 3) => {
   let bytesNotified = 0;
@@ -1231,17 +1264,26 @@ const progressEventReducer = (listener, isDownloadStream, freq = 3) => {
       rate: rate ? rate : void 0,
       estimated: rate && total && inRange ? (total - loaded) / rate : void 0,
       event: e,
-      lengthComputable: total != null
+      lengthComputable: total != null,
+      [isDownloadStream ? "download" : "upload"]: true
     };
-    data[isDownloadStream ? "download" : "upload"] = true;
     listener(data);
   }, freq);
 };
+const progressEventDecorator = (total, throttled) => {
+  const lengthComputable = total != null;
+  return [(loaded) => throttled[0]({
+    lengthComputable,
+    total,
+    loaded
+  }), throttled[1]];
+};
+const asyncDecorator = (fn) => (...args) => utils$1.asap(() => fn(...args));
 const isURLSameOrigin = platform.hasStandardBrowserEnv ? (
   // Standard browser envs have full support of the APIs needed to test
   // whether the request URL is of the same origin as current location.
   function standardBrowserEnv() {
-    const msie = /(msie|trident)/i.test(navigator.userAgent);
+    const msie = platform.navigator && /(msie|trident)/i.test(platform.navigator.userAgent);
     const urlParsingNode = document.createElement("a");
     let originURL;
     function resolveURL(url) {
@@ -1434,15 +1476,15 @@ const xhrAdapter = isXHRAdapterSupported && function(config) {
     const _config = resolveConfig(config);
     let requestData = _config.data;
     const requestHeaders = AxiosHeaders.from(_config.headers).normalize();
-    let { responseType } = _config;
+    let { responseType, onUploadProgress, onDownloadProgress } = _config;
     let onCanceled;
+    let uploadThrottled, downloadThrottled;
+    let flushUpload, flushDownload;
     function done() {
-      if (_config.cancelToken) {
-        _config.cancelToken.unsubscribe(onCanceled);
-      }
-      if (_config.signal) {
-        _config.signal.removeEventListener("abort", onCanceled);
-      }
+      flushUpload && flushUpload();
+      flushDownload && flushDownload();
+      _config.cancelToken && _config.cancelToken.unsubscribe(onCanceled);
+      _config.signal && _config.signal.removeEventListener("abort", onCanceled);
     }
     let request = new XMLHttpRequest();
     request.open(_config.method.toUpperCase(), _config.url, true);
@@ -1489,11 +1531,11 @@ const xhrAdapter = isXHRAdapterSupported && function(config) {
       if (!request) {
         return;
       }
-      reject(new AxiosError("Request aborted", AxiosError.ECONNABORTED, _config, request));
+      reject(new AxiosError("Request aborted", AxiosError.ECONNABORTED, config, request));
       request = null;
     };
     request.onerror = function handleError() {
-      reject(new AxiosError("Network Error", AxiosError.ERR_NETWORK, _config, request));
+      reject(new AxiosError("Network Error", AxiosError.ERR_NETWORK, config, request));
       request = null;
     };
     request.ontimeout = function handleTimeout() {
@@ -1505,7 +1547,7 @@ const xhrAdapter = isXHRAdapterSupported && function(config) {
       reject(new AxiosError(
         timeoutErrorMessage,
         transitional2.clarifyTimeoutError ? AxiosError.ETIMEDOUT : AxiosError.ECONNABORTED,
-        _config,
+        config,
         request
       ));
       request = null;
@@ -1522,11 +1564,14 @@ const xhrAdapter = isXHRAdapterSupported && function(config) {
     if (responseType && responseType !== "json") {
       request.responseType = _config.responseType;
     }
-    if (typeof _config.onDownloadProgress === "function") {
-      request.addEventListener("progress", progressEventReducer(_config.onDownloadProgress, true));
+    if (onDownloadProgress) {
+      [downloadThrottled, flushDownload] = progressEventReducer(onDownloadProgress, true);
+      request.addEventListener("progress", downloadThrottled);
     }
-    if (typeof _config.onUploadProgress === "function" && request.upload) {
-      request.upload.addEventListener("progress", progressEventReducer(_config.onUploadProgress));
+    if (onUploadProgress && request.upload) {
+      [uploadThrottled, flushUpload] = progressEventReducer(onUploadProgress);
+      request.upload.addEventListener("progress", uploadThrottled);
+      request.upload.addEventListener("loadend", flushUpload);
     }
     if (_config.cancelToken || _config.signal) {
       onCanceled = (cancel) => {
@@ -1551,40 +1596,41 @@ const xhrAdapter = isXHRAdapterSupported && function(config) {
   });
 };
 const composeSignals = (signals, timeout) => {
-  let controller = new AbortController();
-  let aborted;
-  const onabort = function(cancel) {
-    if (!aborted) {
-      aborted = true;
-      unsubscribe();
-      const err = cancel instanceof Error ? cancel : this.reason;
-      controller.abort(err instanceof AxiosError ? err : new CanceledError(err instanceof Error ? err.message : err));
-    }
-  };
-  let timer = timeout && setTimeout(() => {
-    onabort(new AxiosError(`timeout ${timeout} of ms exceeded`, AxiosError.ETIMEDOUT));
-  }, timeout);
-  const unsubscribe = () => {
-    if (signals) {
-      timer && clearTimeout(timer);
+  const { length } = signals = signals ? signals.filter(Boolean) : [];
+  if (timeout || length) {
+    let controller = new AbortController();
+    let aborted;
+    const onabort = function(reason) {
+      if (!aborted) {
+        aborted = true;
+        unsubscribe();
+        const err = reason instanceof Error ? reason : this.reason;
+        controller.abort(err instanceof AxiosError ? err : new CanceledError(err instanceof Error ? err.message : err));
+      }
+    };
+    let timer = timeout && setTimeout(() => {
       timer = null;
-      signals.forEach((signal2) => {
-        signal2 && (signal2.removeEventListener ? signal2.removeEventListener("abort", onabort) : signal2.unsubscribe(onabort));
-      });
-      signals = null;
-    }
-  };
-  signals.forEach((signal2) => signal2 && signal2.addEventListener && signal2.addEventListener("abort", onabort));
-  const { signal } = controller;
-  signal.unsubscribe = unsubscribe;
-  return [signal, () => {
-    timer && clearTimeout(timer);
-    timer = null;
-  }];
+      onabort(new AxiosError(`timeout ${timeout} of ms exceeded`, AxiosError.ETIMEDOUT));
+    }, timeout);
+    const unsubscribe = () => {
+      if (signals) {
+        timer && clearTimeout(timer);
+        timer = null;
+        signals.forEach((signal2) => {
+          signal2.unsubscribe ? signal2.unsubscribe(onabort) : signal2.removeEventListener("abort", onabort);
+        });
+        signals = null;
+      }
+    };
+    signals.forEach((signal2) => signal2.addEventListener("abort", onabort));
+    const { signal } = controller;
+    signal.unsubscribe = () => utils$1.asap(unsubscribe);
+    return signal;
+  }
 };
 const streamChunk = function* (chunk, chunkSize) {
   let len = chunk.byteLength;
-  if (!chunkSize || len < chunkSize) {
+  if (len < chunkSize) {
     yield chunk;
     return;
   }
@@ -1596,47 +1642,78 @@ const streamChunk = function* (chunk, chunkSize) {
     pos = end;
   }
 };
-const readBytes = async function* (iterable, chunkSize, encode2) {
-  for await (const chunk of iterable) {
-    yield* streamChunk(ArrayBuffer.isView(chunk) ? chunk : await encode2(String(chunk)), chunkSize);
+const readBytes = async function* (iterable, chunkSize) {
+  for await (const chunk of readStream(iterable)) {
+    yield* streamChunk(chunk, chunkSize);
   }
 };
-const trackStream = (stream, chunkSize, onProgress, onFinish, encode2) => {
-  const iterator = readBytes(stream, chunkSize, encode2);
-  let bytes = 0;
-  return new ReadableStream({
-    type: "bytes",
-    async pull(controller) {
-      const { done, value } = await iterator.next();
+const readStream = async function* (stream) {
+  if (stream[Symbol.asyncIterator]) {
+    yield* stream;
+    return;
+  }
+  const reader = stream.getReader();
+  try {
+    for (; ; ) {
+      const { done, value } = await reader.read();
       if (done) {
-        controller.close();
-        onFinish();
-        return;
+        break;
       }
-      let len = value.byteLength;
-      onProgress && onProgress(bytes += len);
-      controller.enqueue(new Uint8Array(value));
+      yield value;
+    }
+  } finally {
+    await reader.cancel();
+  }
+};
+const trackStream = (stream, chunkSize, onProgress, onFinish) => {
+  const iterator = readBytes(stream, chunkSize);
+  let bytes = 0;
+  let done;
+  let _onFinish = (e) => {
+    if (!done) {
+      done = true;
+      onFinish && onFinish(e);
+    }
+  };
+  return new ReadableStream({
+    async pull(controller) {
+      try {
+        const { done: done2, value } = await iterator.next();
+        if (done2) {
+          _onFinish();
+          controller.close();
+          return;
+        }
+        let len = value.byteLength;
+        if (onProgress) {
+          let loadedBytes = bytes += len;
+          onProgress(loadedBytes);
+        }
+        controller.enqueue(new Uint8Array(value));
+      } catch (err) {
+        _onFinish(err);
+        throw err;
+      }
     },
     cancel(reason) {
-      onFinish(reason);
+      _onFinish(reason);
       return iterator.return();
     }
   }, {
     highWaterMark: 2
   });
 };
-const fetchProgressDecorator = (total, fn) => {
-  const lengthComputable = total != null;
-  return (loaded) => setTimeout(() => fn({
-    lengthComputable,
-    total,
-    loaded
-  }));
-};
 const isFetchSupported = typeof fetch === "function" && typeof Request === "function" && typeof Response === "function";
 const isReadableStreamSupported = isFetchSupported && typeof ReadableStream === "function";
 const encodeText = isFetchSupported && (typeof TextEncoder === "function" ? /* @__PURE__ */ ((encoder) => (str) => encoder.encode(str))(new TextEncoder()) : async (str) => new Uint8Array(await new Response(str).arrayBuffer()));
-const supportsRequestStream = isReadableStreamSupported && (() => {
+const test = (fn, ...args) => {
+  try {
+    return !!fn(...args);
+  } catch (e) {
+    return false;
+  }
+};
+const supportsRequestStream = isReadableStreamSupported && test(() => {
   let duplexAccessed = false;
   const hasContentType = new Request(platform.origin, {
     body: new ReadableStream(),
@@ -1647,14 +1724,9 @@ const supportsRequestStream = isReadableStreamSupported && (() => {
     }
   }).headers.has("Content-Type");
   return duplexAccessed && !hasContentType;
-})();
+});
 const DEFAULT_CHUNK_SIZE = 64 * 1024;
-const supportsResponseStream = isReadableStreamSupported && !!(() => {
-  try {
-    return utils$1.isReadableStream(new Response("").body);
-  } catch (err) {
-  }
-})();
+const supportsResponseStream = isReadableStreamSupported && test(() => utils$1.isReadableStream(new Response("").body));
 const resolvers = {
   stream: supportsResponseStream && ((res) => res.body)
 };
@@ -1673,9 +1745,13 @@ const getBodyLength = async (body) => {
     return body.size;
   }
   if (utils$1.isSpecCompliantForm(body)) {
-    return (await new Request(body).arrayBuffer()).byteLength;
+    const _request = new Request(platform.origin, {
+      method: "POST",
+      body
+    });
+    return (await _request.arrayBuffer()).byteLength;
   }
-  if (utils$1.isArrayBufferView(body)) {
+  if (utils$1.isArrayBufferView(body) || utils$1.isArrayBuffer(body)) {
     return body.byteLength;
   }
   if (utils$1.isURLSearchParams(body)) {
@@ -1705,14 +1781,11 @@ const fetchAdapter = isFetchSupported && (async (config) => {
     fetchOptions
   } = resolveConfig(config);
   responseType = responseType ? (responseType + "").toLowerCase() : "text";
-  let [composedSignal, stopTimeout] = signal || cancelToken || timeout ? composeSignals([signal, cancelToken], timeout) : [];
-  let finished, request;
-  const onFinish = () => {
-    !finished && setTimeout(() => {
-      composedSignal && composedSignal.unsubscribe();
-    });
-    finished = true;
-  };
+  let composedSignal = composeSignals([signal, cancelToken && cancelToken.toAbortSignal()], timeout);
+  let request;
+  const unsubscribe = composedSignal && composedSignal.unsubscribe && (() => {
+    composedSignal.unsubscribe();
+  });
   let requestContentLength;
   try {
     if (onUploadProgress && supportsRequestStream && method !== "get" && method !== "head" && (requestContentLength = await resolveBodyLength(headers, data)) !== 0) {
@@ -1726,15 +1799,17 @@ const fetchAdapter = isFetchSupported && (async (config) => {
         headers.setContentType(contentTypeHeader);
       }
       if (_request.body) {
-        data = trackStream(_request.body, DEFAULT_CHUNK_SIZE, fetchProgressDecorator(
+        const [onProgress, flush2] = progressEventDecorator(
           requestContentLength,
-          progressEventReducer(onUploadProgress)
-        ), null, encodeText);
+          progressEventReducer(asyncDecorator(onUploadProgress))
+        );
+        data = trackStream(_request.body, DEFAULT_CHUNK_SIZE, onProgress, flush2);
       }
     }
     if (!utils$1.isString(withCredentials)) {
-      withCredentials = withCredentials ? "cors" : "omit";
+      withCredentials = withCredentials ? "include" : "omit";
     }
+    const isCredentialsSupported = "credentials" in Request.prototype;
     request = new Request(url, {
       ...fetchOptions,
       signal: composedSignal,
@@ -1742,28 +1817,31 @@ const fetchAdapter = isFetchSupported && (async (config) => {
       headers: headers.normalize().toJSON(),
       body: data,
       duplex: "half",
-      withCredentials
+      credentials: isCredentialsSupported ? withCredentials : void 0
     });
     let response = await fetch(request);
     const isStreamResponse = supportsResponseStream && (responseType === "stream" || responseType === "response");
-    if (supportsResponseStream && (onDownloadProgress || isStreamResponse)) {
+    if (supportsResponseStream && (onDownloadProgress || isStreamResponse && unsubscribe)) {
       const options = {};
       ["status", "statusText", "headers"].forEach((prop) => {
         options[prop] = response[prop];
       });
       const responseContentLength = utils$1.toFiniteNumber(response.headers.get("content-length"));
+      const [onProgress, flush2] = onDownloadProgress && progressEventDecorator(
+        responseContentLength,
+        progressEventReducer(asyncDecorator(onDownloadProgress), true)
+      ) || [];
       response = new Response(
-        trackStream(response.body, DEFAULT_CHUNK_SIZE, onDownloadProgress && fetchProgressDecorator(
-          responseContentLength,
-          progressEventReducer(onDownloadProgress, true)
-        ), isStreamResponse && onFinish, encodeText),
+        trackStream(response.body, DEFAULT_CHUNK_SIZE, onProgress, () => {
+          flush2 && flush2();
+          unsubscribe && unsubscribe();
+        }),
         options
       );
     }
     responseType = responseType || "text";
     let responseData = await resolvers[utils$1.findKey(resolvers, responseType) || "text"](response, config);
-    !isStreamResponse && onFinish();
-    stopTimeout && stopTimeout();
+    !isStreamResponse && unsubscribe && unsubscribe();
     return await new Promise((resolve, reject) => {
       settle(resolve, reject, {
         data: responseData,
@@ -1775,7 +1853,7 @@ const fetchAdapter = isFetchSupported && (async (config) => {
       });
     });
   } catch (err) {
-    onFinish();
+    unsubscribe && unsubscribe();
     if (err && err.name === "TypeError" && /fetch/i.test(err.message)) {
       throw Object.assign(
         new AxiosError("Network Error", AxiosError.ERR_NETWORK, config, request),
@@ -1882,7 +1960,7 @@ function dispatchRequest(config) {
     return Promise.reject(reason);
   });
 }
-const VERSION = "1.7.2";
+const VERSION = "1.7.7";
 const validators$1 = {};
 ["object", "boolean", "number", "function", "string", "symbol"].forEach((type, i) => {
   validators$1[type] = function validator2(thing) {
@@ -2169,6 +2247,15 @@ class CancelToken {
     if (index !== -1) {
       this._listeners.splice(index, 1);
     }
+  }
+  toAbortSignal() {
+    const controller = new AbortController();
+    const abort = (err) => {
+      controller.abort(err);
+    };
+    this.subscribe(abort);
+    controller.signal.unsubscribe = () => this.unsubscribe(abort);
+    return controller.signal;
   }
   /**
    * Returns an object that contains a new `CancelToken` and a function that, when called,
