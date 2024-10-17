@@ -3270,8 +3270,8 @@
         current.network = networks[name];
         this._search_provider = void 0;
         this._transactions = void 0;
-        this.network_environment("production");
         this.ensure();
+        this.network_environment("production");
         this.persist();
         return this;
       },
@@ -3362,7 +3362,8 @@
   const bap = {
     network,
     loadLocation,
-    watchLocation
+    watchLocation,
+    api
   };
   return bap;
 });

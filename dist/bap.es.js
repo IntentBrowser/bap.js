@@ -3266,8 +3266,8 @@ function network() {
       current.network = networks[name];
       this._search_provider = void 0;
       this._transactions = void 0;
-      this.network_environment("production");
       this.ensure();
+      this.network_environment("production");
       this.persist();
       return this;
     },
@@ -3358,7 +3358,8 @@ function network() {
 const bap = {
   network,
   loadLocation,
-  watchLocation
+  watchLocation,
+  api
 };
 export {
   bap as default

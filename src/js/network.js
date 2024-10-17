@@ -99,9 +99,8 @@ function network() {
             current.network = networks[name];
             this._search_provider = undefined;
             this._transactions = undefined;
-            this.network_environment("production");
-
             this.ensure();
+            this.network_environment("production");
             this.persist();
             return this;
         },
