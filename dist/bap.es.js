@@ -2557,7 +2557,7 @@ function api() {
         _parameter = {};
       }
       if (arguments.length > 0) {
-        _parameter = p;
+        _parameter = Object.assign(_parameter, p);
       }
       return this;
     },
@@ -2596,8 +2596,8 @@ function api() {
     },
     get: function(qryJson) {
       let self2 = this;
-      let params = qryJson ? qryJson : {};
-      let config = { data: {}, params, headers: self2.headers() };
+      this.parameters(qryJson);
+      let config = { data: {}, params: _parameter, headers: self2.headers() };
       if (_responseType) {
         config.responseType = _responseType;
       }

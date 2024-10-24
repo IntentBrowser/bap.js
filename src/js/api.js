@@ -20,7 +20,7 @@ function api() {
                 _parameter = {};
             }
             if (arguments.length > 0) {
-                _parameter = p;
+                _parameter = Object.assign(_parameter, p);
             }
             return this;
         },
@@ -59,8 +59,9 @@ function api() {
         },
         get: function (qryJson) {
             let self = this;
-            let params = qryJson ? qryJson : {};
-            let config = { data: {}, params: params, headers: self.headers() };
+            this.parameters(qryJson);
+            //let params = qryJson ? qryJson : {};
+            let config = { data: {}, params: _parameter, headers: self.headers() };
             if (_responseType) {
                 config.responseType = _responseType;
             }
