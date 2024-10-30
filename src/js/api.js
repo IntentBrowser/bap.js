@@ -6,6 +6,7 @@ function api() {
     var _parameter;
     var _headers;
     var _responseType;
+    var _method;
 
     return {
         url: function (url) {
@@ -57,7 +58,7 @@ function api() {
                 withCredentials: false,
             });
         },
-        get: function (qryJson) {
+        get: async function (qryJson) {
             let self = this;
             this.parameters(qryJson);
             //let params = qryJson ? qryJson : {};
@@ -65,27 +66,34 @@ function api() {
             if (_responseType) {
                 config.responseType = _responseType;
             }
-            return self
+            if (_method) {
+                config.method = _method;
+            }
+            const response = await self
                 .http()
-                .get(self.url(), config)
-                .then(function (response) {
-                    return response.data;
-                });
+                .get(self.url(), config);
+            return response.data;
         },
-        post: function () {
+        method: function method(method) {
+            _method = method;
+            return this;
+        },
+        post: async function () {
             let self = this;
 
             let config = { headers: self.headers() };
             if (_responseType) {
                 config.responseType = _responseType;
             }
+            if (_method) {
+                config.method = _method;
+            }
 
-            return self
+            const response = await self
                 .http()
-                .post(self.url(), _parameter, config)
-                .then(function (response) {
-                    return response.data;
-                });
+                .post(self.url(), _parameter, config);
+
+            return response.data;
         },
         responseType: function (type) {
             _responseType = type;
