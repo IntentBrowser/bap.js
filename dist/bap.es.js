@@ -3146,7 +3146,7 @@ async function transactions(network2) {
       }
       return {
         isPlaced: function() {
-          return txn.confirm.response || txn.confirm.request && txn.confirm.request.message && txn.confirm.request.message.order && !txn.confirm.request.bpp_url;
+          return txn.confirm.response || txn.confirm.request && txn.confirm.request.message && txn.confirm.request.message.order && !txn.confirm.request.bpp_uri;
         },
         dependent_actions: function(action) {
           let actions = Object.keys(txn);
@@ -3246,15 +3246,15 @@ async function transactions(network2) {
           let self2 = this;
           let action_payload = self2.payload(action);
           action_payload.request.context.message_id = crypto.randomUUID();
-          if (action == "search" || action_payload.request.context.bpp_url) {
+          if (action == "search" || action_payload.request.context.bpp_uri) {
             let response = await api().url(
               `${network2.search_provider().get().subscriber_url}/${action}`
             ).parameters(action_payload.request).headers({
               "X-CallBackToBeSynchronized": sync ? "Y" : "N"
             }).post();
-            if (sync == "Y") {
-              action_payload.response = response;
-              await self2.propagate_to_dependent_actions(action, response);
+            if (sync && action != "search") {
+              action_payload.response = response[0];
+              await self2.propagate_to_dependent_actions(action, response[0]);
             }
             if (action == "confirm") {
               await network_transactions.close_cart(action_payload.request.context.transaction_id);

@@ -110,7 +110,7 @@ async function transactions(network) {
                 isPlaced: function () {
                     return txn.confirm.response || (txn.confirm.request && txn.confirm.request.message &&
                         txn.confirm.request.message.order &&
-                        !txn.confirm.request.bpp_url);
+                        !txn.confirm.request.bpp_uri);
                 },
                 dependent_actions: function (action) {
                     let actions = Object.keys(txn);
@@ -220,7 +220,7 @@ async function transactions(network) {
                     let action_payload = self.payload(action);
                     action_payload.request.context.message_id =
                         crypto.randomUUID();
-                    if (action == "search" || action_payload.request.context.bpp_url) {
+                    if (action == "search" || action_payload.request.context.bpp_uri) {
                         let response = await api()
                             .url(
                                 `${network.search_provider().get().subscriber_url
@@ -231,9 +231,9 @@ async function transactions(network) {
                                 "X-CallBackToBeSynchronized": sync ? "Y" : "N",
                             })
                             .post();
-                        if (sync == 'Y') {
-                            action_payload.response = response;
-                            await self.propagate_to_dependent_actions(action, response);
+                        if (sync && action != "search") {
+                            action_payload.response = response[0];
+                            await self.propagate_to_dependent_actions(action, response[0]);
                         }
                         if (action == "confirm") {
                             await network_transactions.close_cart(action_payload.request.context.transaction_id); // Reset Cart.
