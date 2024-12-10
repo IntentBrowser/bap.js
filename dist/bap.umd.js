@@ -3150,7 +3150,7 @@
         }
         return {
           isPlaced: function() {
-            return txn.confirm.response || txn.confirm.request && txn.confirm.request.message && txn.confirm.request.message.order && !txn.confirm.request.bpp_uri;
+            return txn.confirm.response && txn.confirm.response.message && txn.confirm.response.message.order || txn.confirm.request && txn.confirm.request.message && txn.confirm.request.message.order && !txn.confirm.request.bpp_uri;
           },
           dependent_actions: function(action) {
             let actions = Object.keys(txn);
