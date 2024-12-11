@@ -215,6 +215,13 @@ async function transactions(network) {
                         await cartsDb.set(transaction_id, JSON.parse(JSON.stringify(txn)));
                     }
                 },
+                delete: async function () {
+                    if (this.isPlaced()) {
+                        await ordersDb.rm(transaction_id);
+                    } else {
+                        await cartsDb.rm(transaction_id);
+                    }
+                },
                 call: async function (action, sync = false) {
                     let self = this;
                     let action_payload = self.payload(action);
