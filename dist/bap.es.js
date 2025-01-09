@@ -3370,7 +3370,6 @@ function network() {
       this._search_provider = void 0;
       this._transactions = void 0;
       this.ensure();
-      this.network_environment("production");
       this.persist();
       return this;
     },
@@ -3443,18 +3442,6 @@ function network() {
     _transactions: void 0,
     async transactions() {
       return this._transactions || (this._transactions = await transactions(this));
-    },
-    _network_environments: ["production", "test"],
-    network_environments() {
-      return this._network_environments;
-    },
-    network_environment(env) {
-      if (this._network_environments.indexOf(env) >= 0) {
-        current.network.network_environment = env;
-      } else {
-        current.network.network_environment = void 0;
-      }
-      this.persist();
     }
   };
 }
