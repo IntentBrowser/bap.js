@@ -3332,7 +3332,7 @@
       usage: "SCHEDULE"
     },
     HIRE_MOVABLE_SERVICE: {
-      resource_category: "SERVICE",
+      resource_category: "SERVICES",
       used_for_transport: false,
       transportable: true,
       usage: "SCHEDULE"
