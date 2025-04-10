@@ -3053,28 +3053,28 @@
   async function transactions(network2) {
     network2.ensure();
     let n = network2.get();
-    let transactions2 = {};
+    let _transactions = {};
     let cartsDb = (await db()).carts;
     let ordersDb = (await db()).orders;
     let carts = [];
     let cartDbKeys = await cartsDb.keys();
     for (const txnId of cartDbKeys) {
       let cart = await cartsDb.get(txnId);
-      transactions2[txnId] = cart;
+      _transactions[txnId] = cart;
       carts.push(cart);
     }
     let orderDbKeys = await ordersDb.keys();
     for (const txnId of orderDbKeys) {
       let order = await ordersDb.get(txnId);
-      transactions2[txnId] = order;
+      _transactions[txnId] = order;
     }
     let evtSource = void 0;
     return {
       close_cart: async function(transaction_id) {
-        let cart = transactions2[transaction_id];
-        if (cart) {
+        let _cart = _transactions[transaction_id];
+        if (_cart) {
           if (this.transaction(transaction_id).isPlaced()) {
-            await ordersDb.set(transaction_id, JSON.parse(JSON.stringify(cart)));
+            await ordersDb.set(transaction_id, JSON.parse(JSON.stringify(_cart)));
           }
           await cartsDb.rm(transaction_id);
           let index = carts.findIndex((c) => c.search.request.context.transaction_id == transaction_id);
@@ -3126,7 +3126,7 @@
           }
         };
         await cartsDb.set(cart.search.request.context.transaction_id, cart);
-        transactions2[cart.search.request.context.transaction_id] = cart;
+        _transactions[cart.search.request.context.transaction_id] = cart;
         carts.push(cart);
         return cart;
       },
@@ -3140,17 +3140,18 @@
         return carts;
       },
       list: function() {
-        return transactions2;
+        return _transactions;
       },
       transaction: function(transaction_id) {
-        let txn = transaction_id ? transactions2[transaction_id] : void 0;
+        let txn = transaction_id ? _transactions[transaction_id] : void 0;
         let network_transactions = this;
         if (!txn) {
           throw new Error("Invalid transaction_id!");
         }
         return {
+          _headers: {},
           isPlaced: function() {
-            return txn.confirm.response && txn.confirm.response.message && txn.confirm.response.message.order || txn.confirm.request && txn.confirm.request.message && txn.confirm.request.message.order && !txn.confirm.request.bpp_uri;
+            return txn.confirm.response && txn.confirm.response.message && txn.confirm.response.message.order || txn.confirm.request && txn.confirm.request.message && txn.confirm.request.message.order && !txn.confirm.request.bpp_uri && !txn.confirm.response;
           },
           dependent_actions: function(action) {
             let actions = Object.keys(txn);
@@ -3174,8 +3175,8 @@
           response: function(action) {
             return txn[action].response;
           },
-          search: function() {
-            return this.call("search", false);
+          search: function(sync = false) {
+            return this.call("search", sync);
           },
           select: function() {
             return this.call("select", true);
@@ -3237,10 +3238,10 @@
                 self2.payload(dependent_action).request = next_request;
               }
             );
-            await this.update();
+            await this.update(action);
           },
-          update: async function() {
-            if (this.isPlaced()) {
+          update: async function(action) {
+            if (this.isPlaced() && action != "confirm") {
               await ordersDb.set(transaction_id, JSON.parse(JSON.stringify(txn)));
             } else {
               await cartsDb.set(transaction_id, JSON.parse(JSON.stringify(txn)));
@@ -3253,6 +3254,10 @@
               await cartsDb.rm(transaction_id);
             }
           },
+          headers(map = {}) {
+            this._headers = { ...this._headers, ...map };
+            return this._headers;
+          },
           call: async function(action, sync = false) {
             let self2 = this;
             let action_payload = self2.payload(action);
@@ -3261,10 +3266,10 @@
               let response = await api().url(
                 `${network2.search_provider().get().subscriber_url}/${action}`
               ).parameters(action_payload.request).headers({
-                "X-CallBackToBeSynchronized": sync ? "Y" : "N"
+                "X-CallBackToBeSynchronized": sync ? "Y" : "N",
+                ...self2.headers()
               }).post();
-              if (sync && action != "search") {
-                action_payload.response = response[0];
+              if (sync && action_payload.request.context.bpp_id) {
                 await self2.propagate_to_dependent_actions(action, response[0]);
               }
               if (action == "confirm") {
