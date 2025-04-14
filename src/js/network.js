@@ -83,6 +83,10 @@ const domain_category_descriptor = {
 
 function network() {
     let current = Lockr.get("current");
+    if (current) {
+        delete current.network.domains;
+    }
+
 
     return {
         persist() {
