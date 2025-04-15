@@ -141,7 +141,7 @@ function network() {
                     .then(function (response) {
                         current.network.domains = response;
                         if (current.network.domains.length == 1) {
-                            current.network.domain = current.network.domains[0];
+                            self.domain(current.network.domains[0]);
                         }
                         return current.network.domains;
                     })
@@ -172,6 +172,7 @@ function network() {
                     }
                     current.network.domain = found;
                 }
+                self._transactions = undefined;
                 self.persist();
 
                 return current.network.domain;

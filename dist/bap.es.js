@@ -3412,7 +3412,7 @@ function network() {
         return api().url(`${this.base_url()}/network_domains`).headers({ ApiKeyCase: "SNAKE", ApiRootRequired: "N" }).get().then(function(response) {
           current.network.domains = response;
           if (current.network.domains.length == 1) {
-            current.network.domain = current.network.domains[0];
+            self2.domain(current.network.domains[0]);
           }
           return current.network.domains;
         }).catch((err) => {
@@ -3439,6 +3439,7 @@ function network() {
           }
           current.network.domain = found;
         }
+        self2._transactions = void 0;
         self2.persist();
         return current.network.domain;
       });
