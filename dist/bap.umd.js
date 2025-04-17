@@ -3209,11 +3209,11 @@
               if (!response || response.done) {
                 evtSource.close();
                 evtSource = void 0;
-                on_event(void 0);
+                await on_event(void 0);
               } else if (response.message) {
                 let action = response.context.action.substring(3);
                 await this.propagate_to_dependent_actions(action, response);
-                on_event(response);
+                await on_event(response);
               }
             };
           },
@@ -3415,6 +3415,11 @@
         } else {
           return api().url(`${this.base_url()}/network_domains`).headers({ ApiKeyCase: "SNAKE", ApiRootRequired: "N" }).get().then(function(response) {
             current.network.domains = response;
+            current.network.domains.forEach((found) => {
+              if (found) {
+                found.meta = domain_category_descriptor[found.domain_category];
+              }
+            });
             if (current.network.domains.length == 1) {
               self2.domain(current.network.domains[0]);
             }
@@ -3439,7 +3444,7 @@
               return domain.code == d || domain.code == d.code;
             });
             if (found) {
-              found.meta = domain_category_descriptor[found.domain_category];
+              found.meta || (found.meta = domain_category_descriptor[found.domain_category]);
             }
             current.network.domain = found;
           }

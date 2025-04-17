@@ -140,9 +140,16 @@ function network() {
                     .get()
                     .then(function (response) {
                         current.network.domains = response;
+                        current.network.domains.forEach(found => {
+                            if (found) {
+                                found.meta =
+                                    domain_category_descriptor[found.domain_category];
+                            }
+                        });
                         if (current.network.domains.length == 1) {
                             self.domain(current.network.domains[0]);
                         }
+
                         return current.network.domains;
                     })
                     .catch((err) => {
@@ -167,7 +174,7 @@ function network() {
                         return domain.code == d || domain.code == d.code;
                     });
                     if (found) {
-                        found.meta =
+                        found.meta ||=
                             domain_category_descriptor[found.domain_category];
                     }
                     current.network.domain = found;
