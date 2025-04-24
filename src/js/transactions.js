@@ -175,11 +175,11 @@ async function transactions(network) {
                         if (!response || response.done) {
                             evtSource.close();
                             evtSource = undefined;
-                            await on_event(undefined);
+                            on_event(undefined);
                         } else if (response.message) {
+                            on_event(response);
                             let action = response.context.action.substring(3); // strip the on_...
                             await this.propagate_to_dependent_actions(action, response);
-                            await on_event(response);
                         }
                     };
                 },

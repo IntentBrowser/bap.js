@@ -3205,11 +3205,11 @@ async function transactions(network2) {
             if (!response || response.done) {
               evtSource.close();
               evtSource = void 0;
-              await on_event(void 0);
+              on_event(void 0);
             } else if (response.message) {
+              on_event(response);
               let action = response.context.action.substring(3);
               await this.propagate_to_dependent_actions(action, response);
-              await on_event(response);
             }
           };
         },
