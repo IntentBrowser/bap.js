@@ -162,7 +162,7 @@ function network() {
                     });
             }
         },
-        domain(d) {
+        domain(d, persist = true) {
             let self = this;
 
             self.ensure();
@@ -180,8 +180,9 @@ function network() {
                     current.network.domain = found;
                 }
                 self._transactions = undefined;
-                self.persist();
-
+                if (persist) {
+                    self.persist();
+                }
                 return current.network.domain;
             });
         },

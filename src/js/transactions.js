@@ -37,6 +37,9 @@ async function transactions(network) {
                 carts.splice(index, 1);
             }
         },
+        cart: function (transaction_id) {
+            return _transactions[transaction_id];
+        },
         new_cart: async function () {
             let cart = {
                 search: {

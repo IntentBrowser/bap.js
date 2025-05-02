@@ -3081,6 +3081,9 @@
           carts.splice(index, 1);
         }
       },
+      cart: function(transaction_id) {
+        return _transactions[transaction_id];
+      },
       new_cart: async function() {
         let cart = {
           search: {
@@ -3433,7 +3436,7 @@
           });
         }
       },
-      domain(d) {
+      domain(d, persist = true) {
         let self2 = this;
         self2.ensure();
         return self2.domains().then((domains) => {
@@ -3449,7 +3452,9 @@
             current.network.domain = found;
           }
           self2._transactions = void 0;
-          self2.persist();
+          if (persist) {
+            self2.persist();
+          }
           return current.network.domain;
         });
       },
