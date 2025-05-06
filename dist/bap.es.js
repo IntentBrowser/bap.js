@@ -3118,6 +3118,11 @@ async function transactions(network2) {
           response: void 0,
           depends: ["confirm"]
         },
+        rating: {
+          request: void 0,
+          response: void 0,
+          depends: ["confirm"]
+        },
         cancel: {
           request: void 0,
           response: void 0,
@@ -3166,6 +3171,10 @@ async function transactions(network2) {
           return dependent_actions;
         },
         payload: function(action) {
+          txn[action] || (txn[action] = {
+            request: void 0,
+            response: void 0
+          });
           return txn[action];
         },
         request: function(action) {
@@ -3176,6 +3185,9 @@ async function transactions(network2) {
         },
         search: function(sync = false) {
           return this.call("search", sync);
+        },
+        rating: function(sync = false) {
+          return this.call("rating", sync);
         },
         select: function() {
           return this.call("select", true);

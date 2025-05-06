@@ -78,6 +78,11 @@ async function transactions(network) {
                     response: undefined,
                     depends: ["confirm"],
                 },
+                rating: {
+                    request: undefined,
+                    response: undefined,
+                    depends: ["confirm"],
+                },
                 cancel: {
                     request: undefined,
                     response: undefined,
@@ -134,17 +139,25 @@ async function transactions(network) {
                     return dependent_actions;
                 },
                 payload: function (action) {
+                    txn[action] ||= {
+                        request: undefined,
+                        response: undefined,
+                    }
                     return txn[action];
                 },
                 request: function (action) {
                     return txn[action].request;
                 },
+
                 response: function (action) {
                     return txn[action].response;
                 },
 
                 search: function (sync = false) {
                     return this.call("search", sync);
+                },
+                rating: function (sync = false) {
+                    return this.call("rating", sync);
                 },
                 select: function () {
                     return this.call("select", true);
