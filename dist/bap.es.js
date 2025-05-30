@@ -3316,60 +3316,80 @@ const networks = {
       version: "1.0",
   },*/
 };
+const descriptionMap = {
+  fulfillment_type: {
+    "HOME-DELIVERY": "At Buyer's location",
+    "STORE-PICKUP": "At Provider's location"
+  },
+  payment_type: {
+    "COD": "On Completing",
+    "PRE-PAID": "Prepaid",
+    "POST-DELIVERY": "Post Completing"
+  }
+};
 const domain_category_descriptor = {
   BUY_TRANSPORT_VEHICLE: {
     resource_category: "GOODS",
     used_for_transport: true,
     transportable: true,
-    usage: "CONTINUOUS"
+    usage: "CONTINUOUS",
+    description: descriptionMap
   },
   RENT_TRANSPORT_VEHICLE: {
     resource_category: "GOODS",
     used_for_transport: true,
     transportable: true,
-    usage: "SCHEDULE"
+    usage: "SCHEDULE",
+    description: descriptionMap
   },
   HIRE_TRANSPORT_SERVICE: {
     resource_category: "SERVICES",
     used_for_transport: true,
     transportable: true,
-    usage: "SCHEDULE"
+    usage: "SCHEDULE",
+    description: descriptionMap
   },
   BUY_MOVABLE_GOODS: {
     resource_category: "GOODS",
     used_for_transport: false,
     transportable: true,
-    usage: "CONTINUOUS"
+    usage: "CONTINUOUS",
+    description: descriptionMap
   },
   RENT_MOVABLE_GOODS: {
     resource_category: "GOODS",
     used_for_transport: false,
     transportable: true,
-    usage: "SCHEDULE"
+    usage: "SCHEDULE",
+    description: descriptionMap
   },
   HIRE_MOVABLE_SERVICE: {
     resource_category: "SERVICES",
     used_for_transport: false,
     transportable: true,
-    usage: "SCHEDULE"
+    usage: "SCHEDULE",
+    description: descriptionMap
   },
   BUY_IMMOVABLE_GOODS: {
     resource_category: "GOODS",
     used_for_transport: false,
     transportable: false,
-    usage: "CONTINUOUS"
+    usage: "CONTINUOUS",
+    description: descriptionMap
   },
   RENT_IMOVABLE_GOODS: {
     resource_category: "GOODS",
     used_for_transport: false,
     transportable: false,
-    usage: "SCHEDULE"
+    usage: "SCHEDULE",
+    description: descriptionMap
   },
   HIRE_IMMOVABLE_SERVICE: {
     resource_category: "SERVICES",
     used_for_transport: false,
     transportable: false,
-    usage: "SCHEDULE"
+    usage: "SCHEDULE",
+    description: descriptionMap
   }
 };
 function network() {
