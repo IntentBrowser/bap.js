@@ -3324,7 +3324,11 @@ const descriptionMap = {
   payment_type: {
     "COD": "On Completing",
     "PRE-PAID": "Prepaid",
-    "POST-DELIVERY": "Post Completing"
+    "POST-DELIVERY": "Post Completing",
+    "PRE-ORDER": "Prepaid",
+    "ON-FULFILLMENT": "On Completing",
+    "PRE-FULFILLMENT": "Prepaid",
+    "POST-FULFILLMENT": "Post Completing"
   }
 };
 const domain_category_descriptor = {
