@@ -3318,8 +3318,8 @@ const networks = {
 };
 const descriptionMap = {
   fulfillment_type: {
-    "HOME-DELIVERY": "At Buyer's location",
-    "STORE-PICKUP": "At Provider's location"
+    "HOME-DELIVERY": "Door Delivery",
+    "STORE-PICKUP": "At Seller Location"
   },
   payment_type: {
     "COD": "On Completing",
