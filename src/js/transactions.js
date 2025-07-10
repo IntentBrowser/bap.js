@@ -174,6 +174,9 @@ async function transactions(network) {
                 cancel: function () {
                     return this.call("cancel", true);
                 },
+                update: function () {
+                    return this.call("update", true);
+                },
                 read_events: function (message_id, on_event) {
                     if (!on_event) {
                         return;
@@ -223,10 +226,10 @@ async function transactions(network) {
                                 next_request;
                         }
                     );
-                    await this.update(action);
+                    await this.save(action);
 
                 },
-                update: async function (action) {
+                save: async function (action) {
                     if (this.isPlaced() && action != "confirm") {
                         await ordersDb.set(transaction_id, JSON.parse(JSON.stringify(txn)));
                     } else {
