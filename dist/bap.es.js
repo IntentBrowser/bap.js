@@ -2618,11 +2618,16 @@ function api() {
       if (_responseType) {
         config.responseType = _responseType;
       }
-      if (_method) {
-        config.method = _method;
+      if (_method == "put") {
+        const response = await self2.http().put(self2.url(), _parameter, config);
+        return response.data;
+      } else if (_method == "delete") {
+        const response = await self2.http().delete(self2.url(), { headers: self2.headers(), "data": _parameter });
+        return response.data;
+      } else {
+        const response = await self2.http().post(self2.url(), _parameter, config);
+        return response.data;
       }
-      const response = await self2.http().post(self2.url(), _parameter, config);
-      return response.data;
     },
     responseType: function(type) {
       _responseType = type;

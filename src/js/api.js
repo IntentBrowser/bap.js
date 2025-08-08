@@ -85,15 +85,26 @@ function api() {
             if (_responseType) {
                 config.responseType = _responseType;
             }
-            if (_method) {
-                config.method = _method;
+            if (_method == 'put') {
+                const response = await self
+                    .http()
+                    .put(self.url(), _parameter, config);
+
+                return response.data;
+            } else if (_method == 'delete') {
+                const response = await self
+                    .http()
+                    .delete(self.url(), { headers: self.headers(), "data": _parameter });
+
+                return response.data;
+            } else {
+                const response = await self
+                    .http()
+                    .post(self.url(), _parameter, config);
+
+                return response.data;
+
             }
-
-            const response = await self
-                .http()
-                .post(self.url(), _parameter, config);
-
-            return response.data;
         },
         responseType: function (type) {
             _responseType = type;
