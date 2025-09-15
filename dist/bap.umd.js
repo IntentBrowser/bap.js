@@ -3313,14 +3313,15 @@
     };
   }
   const networks = {
+    /*
     hbo: {
-      name: "hbo",
-      version: "1.2",
-      registry_id: "id.humbhionline.in",
-      base_url: "https://id.humbhionline.in",
-      registry_url: "https://id.humbhionline.in/subscribers"
-    }
-    /* beckn_open: {
+        name: "hbo",
+        version: "1.2",
+        registry_id: "id.humbhionline.in",
+        base_url: "https://id.humbhionline.in",
+        registry_url: "https://id.humbhionline.in/subscribers",
+    },
+    beckn_open: {
         name: "beckn_open",
         registry_id: "registry.becknprotocol.io..LREG",
         base_url: "https://registry.becknprotocol.io",
@@ -3409,9 +3410,11 @@
     }
   };
   function network() {
+    var _a;
     let current = get("current");
     if (current) {
       delete current.network.domains;
+      networks[_a = current.network.name] || (networks[_a] = current);
     }
     return {
       persist() {
@@ -3423,7 +3426,11 @@
       isSet() {
         return current && current.network;
       },
-      choose(name) {
+      update(network2) {
+        networks[network2.name] = network2;
+      },
+      choose(name, network_if_absent) {
+        networks[name] || (networks[name] = network_if_absent);
         current || (current = {});
         current.network = networks[name];
         this._search_provider = void 0;
@@ -3450,10 +3457,10 @@
         return current.network.base_url;
       },
       domains() {
-        var _a;
+        var _a2;
         let self2 = this;
         self2.ensure();
-        (_a = current.network).domains || (_a.domains = []);
+        (_a2 = current.network).domains || (_a2.domains = []);
         let domains = current.network.domains;
         if (domains && domains.length > 0) {
           return new Promise((resolve, reject) => {

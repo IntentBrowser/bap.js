@@ -3,7 +3,9 @@ import * as Lockr from "lockr";
 import { search_engine } from "./search_engine";
 import { transactions } from "./transactions";
 
+
 const networks = {
+    /*
     hbo: {
         name: "hbo",
         version: "1.2",
@@ -11,7 +13,7 @@ const networks = {
         base_url: "https://id.humbhionline.in",
         registry_url: "https://id.humbhionline.in/subscribers",
     },
-    /* beckn_open: {
+    beckn_open: {
         name: "beckn_open",
         registry_id: "registry.becknprotocol.io..LREG",
         base_url: "https://registry.becknprotocol.io",
@@ -109,6 +111,7 @@ function network() {
     let current = Lockr.get("current");
     if (current) {
         delete current.network.domains;
+        networks[current.network.name] ||= current;
     }
 
 
@@ -122,7 +125,11 @@ function network() {
         isSet() {
             return current && current.network;
         },
-        choose(name) {
+        update(network) {
+            networks[network.name] = network;
+        },
+        choose(name, network_if_absent) {
+            networks[name] ||= network_if_absent;
             current ||= {};
             current.network = networks[name];
             this._search_provider = undefined;
