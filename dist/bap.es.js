@@ -3074,12 +3074,18 @@ async function transactions(network2) {
     close_cart: async function(transaction_id) {
       let _cart = _transactions[transaction_id];
       if (_cart) {
+        let convertedToOrder = false;
         if (this.transaction(transaction_id).isPlaced()) {
           await ordersDb.set(transaction_id, JSON.parse(JSON.stringify(_cart)));
+          convertedToOrder = true;
         }
         await cartsDb.rm(transaction_id);
         let index = carts.findIndex((c) => c.search.request.context.transaction_id == transaction_id);
         carts.splice(index, 1);
+        if (!convertedToOrder) {
+          delete _transactions[transaction_id];
+          console.log("Closing Cart: " + transaction_id);
+        }
       }
     },
     cart: function(transaction_id) {
@@ -3137,6 +3143,7 @@ async function transactions(network2) {
       await cartsDb.set(cart.search.request.context.transaction_id, cart);
       _transactions[cart.search.request.context.transaction_id] = cart;
       carts.push(cart);
+      console.log("Added transaction: " + cart.search.request.context.transaction_id);
       return cart;
     },
     carts: async function(reset = false) {
@@ -3155,7 +3162,7 @@ async function transactions(network2) {
       let txn = transaction_id ? _transactions[transaction_id] : void 0;
       let network_transactions = this;
       if (!txn) {
-        throw new Error("Invalid transaction_id!");
+        throw new Error("Invalid transaction_id!" + transaction_id);
       }
       return {
         _headers: {},
@@ -3226,7 +3233,6 @@ async function transactions(network2) {
           evtSource.onmessage = async (event) => {
             let response = JSON.parse(event.data);
             if (!response || response.done) {
-              evtSource.close();
               evtSource = void 0;
               on_event(void 0);
             } else if (response.message) {
@@ -3234,6 +3240,9 @@ async function transactions(network2) {
               let action = response.context.action.substring(3);
               await this.propagate_to_dependent_actions(action, response);
             }
+          };
+          evtSource.onerror = async (event) => {
+            evtSource.close();
           };
         },
         async propagate_to_dependent_actions(action, response) {

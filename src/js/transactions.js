@@ -28,13 +28,19 @@ async function transactions(network) {
         close_cart: async function (transaction_id) {
             let _cart = _transactions[transaction_id];
             if (_cart) {
+                let convertedToOrder = false;
                 if (this.transaction(transaction_id).isPlaced()) {
                     await ordersDb.set(transaction_id, JSON.parse(JSON.stringify(_cart)));
                     orders.push(_cart);
+                    convertedToOrder = true;
                 }
                 await cartsDb.rm(transaction_id);
                 let index = carts.findIndex((c) => c.search.request.context.transaction_id == transaction_id);
                 carts.splice(index, 1);
+                if (!convertedToOrder) {
+                    delete _transactions[transaction_id];
+                    console.log("Closing Cart: " + transaction_id);
+                }
             }
         },
         cart: function (transaction_id) {
@@ -92,6 +98,7 @@ async function transactions(network) {
             await cartsDb.set(cart.search.request.context.transaction_id, cart);
             _transactions[cart.search.request.context.transaction_id] = cart;
             carts.push(cart);
+            console.log("Added transaction: " + cart.search.request.context.transaction_id);
             return cart;
         },
         carts: async function (reset = false) {
@@ -111,7 +118,7 @@ async function transactions(network) {
             let network_transactions = this;
             if (!txn) {
                 //Transaction id is generated internally. No control to set it.
-                throw new Error("Invalid transaction_id!");
+                throw new Error("Invalid transaction_id!" + transaction_id);
             }
 
             return {
@@ -192,7 +199,7 @@ async function transactions(network) {
                     evtSource.onmessage = async (event) => {
                         let response = JSON.parse(event.data);
                         if (!response || response.done) {
-                            evtSource.close();
+                            //                            evtSource.close();
                             evtSource = undefined;
                             on_event(undefined);
                         } else if (response.message) {
@@ -201,7 +208,11 @@ async function transactions(network) {
                             await this.propagate_to_dependent_actions(action, response);
                         }
                     };
+                    evtSource.onerror = async (event) => {
+                        evtSource.close();
+                    }
                 },
+
                 async propagate_to_dependent_actions(action, response) {
                     let self = this;
                     let action_payload = self.payload(action);
