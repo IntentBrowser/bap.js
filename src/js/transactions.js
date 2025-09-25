@@ -199,7 +199,7 @@ async function transactions(network) {
                     evtSource.onmessage = async (event) => {
                         let response = JSON.parse(event.data);
                         if (!response || response.done) {
-                            //                            evtSource.close();
+                            //evtSource.close();
                             evtSource = undefined;
                             on_event(undefined);
                         } else if (response.message) {
@@ -209,7 +209,9 @@ async function transactions(network) {
                         }
                     };
                     evtSource.onerror = async (event) => {
-                        evtSource.close();
+                        if (evtSource) {
+                            evtSource.close();
+                        }
                     }
                 },
 

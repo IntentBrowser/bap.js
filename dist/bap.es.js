@@ -3242,7 +3242,9 @@ async function transactions(network2) {
             }
           };
           evtSource.onerror = async (event) => {
-            evtSource.close();
+            if (evtSource) {
+              evtSource.close();
+            }
           };
         },
         async propagate_to_dependent_actions(action, response) {
