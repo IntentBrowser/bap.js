@@ -3237,6 +3237,7 @@
             evtSource.onmessage = async (event) => {
               let response = JSON.parse(event.data);
               if (!response || response.done) {
+                evtSource.close();
                 evtSource = void 0;
                 on_event(void 0);
               } else if (response.message) {
