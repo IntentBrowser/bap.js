@@ -2668,12 +2668,17 @@
     location.speed = position.coords.speed;
     set("Location", location);
   }
-  function loadLocation(enableHighAccuracy) {
+  function loadLocation(enableHighAccuracy, ensureLocationPermission = true) {
     let _location = get("Location");
     if (_location && _location.latitude) {
       _location.cached = true;
       return new Promise(function(resolve, reject) {
         resolve(_location);
+      });
+    }
+    if (!ensureLocationPermission) {
+      return new Promise(function(resolve, reject) {
+        resolve(null);
       });
     }
     return new Promise(function(resolve, reject) {

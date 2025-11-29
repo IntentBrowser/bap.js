@@ -143,7 +143,12 @@ function copyLocation(position, location) {
     Lockr.set("Location", location);
 }
 
-function loadLocation(enableHighAccuracy, ensureUserPermission = true) {
+function isCrawler() {
+    const userAgent = navigator.userAgent.toLowerCase();
+    return userAgent.includes('googlebot') || userAgent.includes('bingbot') || userAgent.includes('slurp');
+}
+
+function loadLocation(enableHighAccuracy, ensureLocationPermission = true) {
     let _location = Lockr.get("Location");
     if (_location && _location.latitude) {
         _location.cached = true;
@@ -151,7 +156,7 @@ function loadLocation(enableHighAccuracy, ensureUserPermission = true) {
             resolve(_location);
         });
     }
-    if (!ensureUserPermission) {
+    if (!ensureLocationPermission) {
         return new Promise(function (resolve, reject) {
             resolve(null);
         });
@@ -195,4 +200,4 @@ function loadLocation(enableHighAccuracy, ensureUserPermission = true) {
 }
 
 
-export { api, loadLocation, watchLocation };
+export { api, loadLocation, watchLocation, isCrawler };
