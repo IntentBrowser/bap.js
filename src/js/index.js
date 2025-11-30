@@ -1,10 +1,12 @@
 import { network } from "./network";
-import { api, loadLocation, watchLocation } from "./api";
+import { isCrawler, api, loadLocation, watchLocation } from "./api";
+
 
 const bap = {
     network,
     loadLocation,
     watchLocation,
     api,
+    isCrawler,
 };
 export default bap;

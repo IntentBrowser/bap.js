@@ -2664,6 +2664,10 @@ function copyLocation(position, location) {
   location.speed = position.coords.speed;
   set("Location", location);
 }
+function isCrawler() {
+  const userAgent = navigator.userAgent.toLowerCase();
+  return userAgent.includes("googlebot") || userAgent.includes("bingbot") || userAgent.includes("slurp");
+}
 function loadLocation(enableHighAccuracy, ensureLocationPermission = true) {
   let _location = get("Location");
   if (_location && _location.latitude) {
@@ -3536,7 +3540,8 @@ const bap = {
   network,
   loadLocation,
   watchLocation,
-  api
+  api,
+  isCrawler
 };
 export {
   bap as default
