@@ -1,5 +1,5 @@
 import { network } from "./network";
-import { isCrawler, api, loadLocation, watchLocation } from "./api";
+import { isCrawler, api, loadLocation, watchLocation, isUserLocationAvailable } from "./api";
 
 
 const bap = {
@@ -8,5 +8,6 @@ const bap = {
     watchLocation,
     api,
     isCrawler,
+    isUserLocationAvailable,
 };
 export default bap;

@@ -147,7 +147,11 @@ function isCrawler() {
     const userAgent = navigator.userAgent.toLowerCase();
     return userAgent.includes('googlebot') || userAgent.includes('bingbot') || userAgent.includes('slurp');
 }
+function isUserLocationAvailable() {
+    let l = Lockr.get("Location");
+    return l && l.latitude && l.longitude;
 
+}
 function loadLocation(enableHighAccuracy, ensureLocationPermission = true) {
     let _location = Lockr.get("Location");
     if (_location && _location.latitude) {
@@ -200,4 +204,4 @@ function loadLocation(enableHighAccuracy, ensureLocationPermission = true) {
 }
 
 
-export { api, loadLocation, watchLocation, isCrawler };
+export { api, loadLocation, watchLocation, isCrawler, isUserLocationAvailable };
