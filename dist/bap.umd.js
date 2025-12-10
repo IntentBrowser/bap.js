@@ -2672,6 +2672,10 @@
     const userAgent = navigator.userAgent.toLowerCase();
     return userAgent.includes("googlebot") || userAgent.includes("bingbot") || userAgent.includes("slurp");
   }
+  function isUserLocationAvailable() {
+    let l = get("Location");
+    return l && l.latitude && l.longitude;
+  }
   function loadLocation(enableHighAccuracy, ensureLocationPermission = true) {
     let _location = get("Location");
     if (_location && _location.latitude) {
@@ -3545,7 +3549,8 @@
     loadLocation,
     watchLocation,
     api,
-    isCrawler
+    isCrawler,
+    isUserLocationAvailable
   };
   return bap;
 });
